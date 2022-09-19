@@ -19,6 +19,8 @@ func doMarshal(buf []byte, v interface{}) ([]byte, error) {
 		return binary.AppendVarint(buf, int64(tv)), nil
 	case uint:
 		return binary.AppendUvarint(buf, uint64(tv)), nil
+	case string:
+		return marshalString(buf, tv)
 	}
 
 	rv := reflect.ValueOf(v)
@@ -43,6 +45,15 @@ func marshalSlice(buf []byte, v reflect.Value) ([]byte, error) {
 	return buf, nil
 }
 
+func marshalString(buf []byte, s string) ([]byte, error) {
+	asBytes := []byte(s)
+	buf, err := doMarshal(buf, len(asBytes))
+	if err != nil {
+		return nil, err
+	}
+	return append(buf, asBytes...), nil
+}
+
 func Unmarshal(b []byte, v interface{}) error {
 	r := bytes.NewReader(b)
 	return doUnmarshal(r, v)
@@ -64,6 +75,8 @@ func doUnmarshal(r io.ByteReader, v interface{}) error {
 		}
 		*tv = uint(vv)
 		return nil
+	case *string:
+		return unmarshalString(r, tv)
 	}
 
 	rv := reflect.ValueOf(v)
@@ -107,5 +120,22 @@ func unmarshalArray(r io.ByteReader, v reflect.Value) error {
 		}
 		reflect.Indirect(v).Index(i).Set(reflect.Indirect(val))
 	}
+	return nil
+}
+
+func unmarshalString(r io.ByteReader, v *string) error {
+	var len int
+	if err := doUnmarshal(r, &len); err != nil {
+		return err
+	}
+	asBytes := make([]byte, len)
+	for i := 0; i < len; i++ {
+		b, err := r.ReadByte()
+		if err != nil {
+			return err
+		}
+		asBytes[i] = b
+	}
+	*v = string(asBytes)
 	return nil
 }
