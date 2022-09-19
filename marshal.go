@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"reflect"
 )
 
@@ -21,6 +22,10 @@ func doMarshal(buf []byte, v interface{}) ([]byte, error) {
 		return marshalUint(buf, rv), nil
 	case rv.CanInt():
 		return marshalInt(buf, rv), nil
+	case rv.Kind() == reflect.Float32:
+		return marshalFloat32(buf, rv), nil
+	case rv.Kind() == reflect.Float64:
+		return marshalFloat64(buf, rv), nil
 	case rv.Kind() == reflect.String:
 		return marshalString(buf, rv)
 	case rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array:
@@ -70,6 +75,14 @@ func marshalBool(buf []byte, v reflect.Value) []byte {
 	return append(buf, vByte)
 }
 
+func marshalFloat32(buf []byte, v reflect.Value) []byte {
+	return binary.AppendUvarint(buf, uint64(math.Float32bits(v.Interface().(float32))))
+}
+
+func marshalFloat64(buf []byte, v reflect.Value) []byte {
+	return binary.AppendUvarint(buf, math.Float64bits(v.Interface().(float64)))
+}
+
 func Unmarshal(b []byte, v interface{}) error {
 	r := bytes.NewReader(b)
 	return doUnmarshal(r, v)
@@ -88,6 +101,10 @@ func doUnmarshal(r io.ByteReader, v interface{}) error {
 		return unmarshalUint(r, rv)
 	case rv.CanInt():
 		return unmarshalInt(r, rv)
+	case rv.Kind() == reflect.Float32:
+		return unmarshalFloat32(r, rv)
+	case rv.Kind() == reflect.Float64:
+		return unmarshalFloat64(r, rv)
 	case rv.Kind() == reflect.String:
 		return unmarshalString(r, rv)
 	case rv.Kind() == reflect.Slice:
@@ -177,5 +194,23 @@ func unmarshalBool(r io.ByteReader, v reflect.Value) error {
 		val = true
 	}
 	v.Set(reflect.ValueOf(val))
+	return nil
+}
+
+func unmarshalFloat32(r io.ByteReader, v reflect.Value) error {
+	vv, err := binary.ReadUvarint(r)
+	if err != nil {
+		return err
+	}
+	v.Set(reflect.ValueOf(math.Float32frombits(uint32(vv))))
+	return nil
+}
+
+func unmarshalFloat64(r io.ByteReader, v reflect.Value) error {
+	vv, err := binary.ReadUvarint(r)
+	if err != nil {
+		return err
+	}
+	v.Set(reflect.ValueOf(math.Float64frombits(uint64(vv))))
 	return nil
 }

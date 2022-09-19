@@ -29,6 +29,8 @@ var tts = []interface{}{
 	"źóżź∂ż∆ż∂",
 	true,
 	false,
+	float64(48912348912389231.3213123123),
+	float32(321321332.3213123123),
 }
 
 func TestMarshal(t *testing.T) {
