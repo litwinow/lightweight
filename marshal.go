@@ -15,6 +15,8 @@ func Marshal(v interface{}) ([]byte, error) {
 
 func doMarshal(buf []byte, v interface{}) ([]byte, error) {
 	switch rv := reflect.ValueOf(v); {
+	case rv.Kind() == reflect.Bool:
+		return marshalBool(buf, rv), nil
 	case rv.CanUint():
 		return marshalUint(buf, rv), nil
 	case rv.CanInt():
@@ -60,6 +62,14 @@ func marshalUint(buf []byte, v reflect.Value) []byte {
 	return binary.AppendUvarint(buf, v.Uint())
 }
 
+func marshalBool(buf []byte, v reflect.Value) []byte {
+	vByte := byte(0)
+	if v.Interface().(bool) {
+		vByte = 1
+	}
+	return append(buf, vByte)
+}
+
 func Unmarshal(b []byte, v interface{}) error {
 	r := bytes.NewReader(b)
 	return doUnmarshal(r, v)
@@ -72,6 +82,8 @@ func doUnmarshal(r io.ByteReader, v interface{}) error {
 	}
 
 	switch rv := rv.Elem(); {
+	case rv.Kind() == reflect.Bool:
+		return unmarshalBool(r, rv)
 	case rv.CanUint():
 		return unmarshalUint(r, rv)
 	case rv.CanInt():
@@ -152,5 +164,18 @@ func unmarshalUint(r io.ByteReader, v reflect.Value) error {
 		return err
 	}
 	v.SetUint(vv)
+	return nil
+}
+
+func unmarshalBool(r io.ByteReader, v reflect.Value) error {
+	vv, err := r.ReadByte()
+	if err != nil {
+		return err
+	}
+	val := false
+	if vv == 1 {
+		val = true
+	}
+	v.Set(reflect.ValueOf(val))
 	return nil
 }
