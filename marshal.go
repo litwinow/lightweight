@@ -22,7 +22,7 @@ func doMarshal(buf []byte, v interface{}) ([]byte, error) {
 	}
 
 	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Slice {
+	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
 		return marshalSlice(buf, rv)
 	}
 	return nil, fmt.Errorf("bad type %T", v)
@@ -70,6 +70,8 @@ func doUnmarshal(r io.ByteReader, v interface{}) error {
 	if rv.Kind() == reflect.Pointer {
 		if rv.Elem().Kind() == reflect.Slice {
 			return unmarshalSlice(r, rv.Elem())
+		} else if rv.Elem().Kind() == reflect.Array {
+			return unmarshalArray(r, rv.Elem())
 		}
 	}
 
@@ -83,12 +85,27 @@ func unmarshalSlice(r io.ByteReader, v reflect.Value) error {
 	}
 	s := reflect.MakeSlice(v.Type(), len, len)
 	for i := 0; i < len; i++ {
-		v := reflect.New(v.Type().Elem())
-		if err := doUnmarshal(r, v.Interface()); err != nil {
+		val := reflect.New(v.Type().Elem())
+		if err := doUnmarshal(r, val.Interface()); err != nil {
 			return err
 		}
-		s.Index(i).Set(reflect.Indirect(v))
+		s.Index(i).Set(reflect.Indirect(val))
 	}
 	v.Set(s)
+	return nil
+}
+
+func unmarshalArray(r io.ByteReader, v reflect.Value) error {
+	var len int
+	if err := doUnmarshal(r, &len); err != nil {
+		return err
+	}
+	for i := 0; i < len; i++ {
+		val := reflect.New(v.Type().Elem())
+		if err := doUnmarshal(r, val.Interface()); err != nil {
+			return err
+		}
+		reflect.Indirect(v).Index(i).Set(reflect.Indirect(val))
+	}
 	return nil
 }

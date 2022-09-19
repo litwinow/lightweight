@@ -15,6 +15,8 @@ var tts = []interface{}{
 	uint(18238943342984432443),
 	[]int{2, -1432478247832253454, 3, -7},
 	[]uint{2, 1, 3, 7},
+	[5]int{1, -43432, 3, 4, 5},
+	[5]uint{1, 2, 3, 4, 5},
 }
 
 func TestMarshal(t *testing.T) {
