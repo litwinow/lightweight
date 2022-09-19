@@ -14,20 +14,18 @@ func Marshal(v interface{}) ([]byte, error) {
 }
 
 func doMarshal(buf []byte, v interface{}) ([]byte, error) {
-	switch tv := v.(type) {
-	case int:
-		return binary.AppendVarint(buf, int64(tv)), nil
-	case uint:
-		return binary.AppendUvarint(buf, uint64(tv)), nil
-	case string:
-		return marshalString(buf, tv)
-	}
-
-	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
+	switch rv := reflect.ValueOf(v); {
+	case rv.CanUint():
+		return marshalUint(buf, rv), nil
+	case rv.CanInt():
+		return marshalInt(buf, rv), nil
+	case rv.Kind() == reflect.String:
+		return marshalString(buf, rv)
+	case rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array:
 		return marshalSlice(buf, rv)
+	default:
+		return nil, fmt.Errorf("bad type %T", v)
 	}
-	return nil, fmt.Errorf("bad type %T", v)
 }
 
 func marshalSlice(buf []byte, v reflect.Value) ([]byte, error) {
@@ -45,13 +43,21 @@ func marshalSlice(buf []byte, v reflect.Value) ([]byte, error) {
 	return buf, nil
 }
 
-func marshalString(buf []byte, s string) ([]byte, error) {
-	asBytes := []byte(s)
+func marshalString(buf []byte, v reflect.Value) ([]byte, error) {
+	asBytes := []byte(v.Interface().(string))
 	buf, err := doMarshal(buf, len(asBytes))
 	if err != nil {
 		return nil, err
 	}
 	return append(buf, asBytes...), nil
+}
+
+func marshalInt(buf []byte, v reflect.Value) []byte {
+	return binary.AppendVarint(buf, v.Int())
+}
+
+func marshalUint(buf []byte, v reflect.Value) []byte {
+	return binary.AppendUvarint(buf, v.Uint())
 }
 
 func Unmarshal(b []byte, v interface{}) error {
@@ -60,35 +66,26 @@ func Unmarshal(b []byte, v interface{}) error {
 }
 
 func doUnmarshal(r io.ByteReader, v interface{}) error {
-	switch tv := v.(type) {
-	case *int:
-		vv, err := binary.ReadVarint(r)
-		if err != nil {
-			return err
-		}
-		*tv = int(vv)
-		return nil
-	case *uint:
-		vv, err := binary.ReadUvarint(r)
-		if err != nil {
-			return err
-		}
-		*tv = uint(vv)
-		return nil
-	case *string:
-		return unmarshalString(r, tv)
-	}
-
 	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Pointer {
-		if rv.Elem().Kind() == reflect.Slice {
-			return unmarshalSlice(r, rv.Elem())
-		} else if rv.Elem().Kind() == reflect.Array {
-			return unmarshalArray(r, rv.Elem())
-		}
+	if rv.Kind() != reflect.Pointer {
+		return fmt.Errorf("v must be pointer")
 	}
 
-	return fmt.Errorf("bad type %T", v)
+	switch rv := rv.Elem(); {
+	case rv.CanUint():
+		return unmarshalUint(r, rv)
+	case rv.CanInt():
+		return unmarshalInt(r, rv)
+	case rv.Kind() == reflect.String:
+		return unmarshalString(r, rv)
+	case rv.Kind() == reflect.Slice:
+		return unmarshalSlice(r, rv)
+	case rv.Kind() == reflect.Array:
+		return unmarshalArray(r, rv)
+	default:
+		return fmt.Errorf("bad type %T", v)
+	}
+
 }
 
 func unmarshalSlice(r io.ByteReader, v reflect.Value) error {
@@ -123,7 +120,7 @@ func unmarshalArray(r io.ByteReader, v reflect.Value) error {
 	return nil
 }
 
-func unmarshalString(r io.ByteReader, v *string) error {
+func unmarshalString(r io.ByteReader, v reflect.Value) error {
 	var len int
 	if err := doUnmarshal(r, &len); err != nil {
 		return err
@@ -136,6 +133,24 @@ func unmarshalString(r io.ByteReader, v *string) error {
 		}
 		asBytes[i] = b
 	}
-	*v = string(asBytes)
+	v.Set(reflect.ValueOf(string(asBytes)))
+	return nil
+}
+
+func unmarshalInt(r io.ByteReader, v reflect.Value) error {
+	vv, err := binary.ReadVarint(r)
+	if err != nil {
+		return err
+	}
+	v.SetInt(vv)
+	return nil
+}
+
+func unmarshalUint(r io.ByteReader, v reflect.Value) error {
+	vv, err := binary.ReadUvarint(r)
+	if err != nil {
+		return err
+	}
+	v.SetUint(vv)
 	return nil
 }
