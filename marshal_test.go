@@ -31,6 +31,16 @@ var tts = []interface{}{
 	false,
 	float64(48912348912389231.3213123123),
 	float32(321321332.3213123123),
+	map[string]int{
+		"blabla": 2318,
+		"flagla": -32193,
+	},
+	struct{}{},
+	struct {
+		I int
+	}{
+		I: 213,
+	},
 }
 
 func TestMarshal(t *testing.T) {
